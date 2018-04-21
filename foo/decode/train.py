@@ -21,9 +21,9 @@ log = Logger('CnnTrain')
 
 
 class CnnTrain:
-    def __init__(self, image_num, image_path, image_height, image_width,
-                 captcha_char_num, char_set_len, batch_size, storge_threshold,
-                 name2vec, vec2name, model_storge_path='./model/',
+    def __init__(self, image_num, image_path, image_width, image_height,
+                 captcha_char_num, char_set_len, name2vec, batch_size=64,
+                 storge_threshold=0.99, model_storge_path='./model/',
                  model_storge_prefix='cnntrain.model'):
         self._image_num = image_num
         self._image_path = image_path
@@ -34,12 +34,12 @@ class CnnTrain:
         self._batch_size = batch_size
         self._storge_threshold = storge_threshold
         self._name2vec = name2vec
-        self._vec2name = vec2name
         self._X = tf.placeholder(tf.float32, [None, image_height * image_width], name='input_x')
-        self._Y = tf.placeholder(tf.float32, [None, captcha_char_num * char_set_len], name='imput_y')
+        self._Y = tf.placeholder(tf.float32, [None, captcha_char_num * char_set_len], name='input_y')
         self._keep_prob = tf.placeholder(tf.float32, name='keep_prob')
-        self._fcl_x = image_height / 8 if image_height % 8 != 0 else int(image_height / 8) + 1
-        self._fcl_y = image_width / 8 if image_width % 8 != 0 else int(image_width / 8) + 1
+        self._fcl_x = int(image_height / 8 if image_height % 8 == 0 else int(image_height / 8) + 1)
+        self._fcl_y = int(image_width / 8 if image_width % 8 == 0 else int(image_width / 8) + 1)
+        print(self._fcl_x, self._fcl_y)
         self._model_storge_name = model_storge_path + model_storge_prefix
         if not tf.gfile.Exists(model_storge_path):  # 创建目录
             tf.gfile.MakeDirs(model_storge_path)
@@ -125,23 +125,23 @@ class CnnTrain:
 
             step = 0
             while True:
-                batch_x, batch_y = self._get_next_batch(64)
+                batch_x, batch_y = self._get_next_batch(self._batch_size)
                 _, loss_ = sess.run([optimizer, loss],
                                     feed_dict={self._X: batch_x, self._Y: batch_y, self._keep_prob: 0.5})
-                log.info('train step: ' + str(step) + ', loss: ' + loss_)
+                log.info('train step: ' + str(step) + ', loss: ' + str(loss_))
                 # 每100 step计算一次准确率
                 if step % 100 == 0:
                     batch_x_test, batch_y_test = self._get_next_batch(100)
                     acc = sess.run(accuracy,
                                    feed_dict={self._X: batch_x_test, self._Y: batch_y_test, self._keep_prob: 1.})
-                    print(step, acc)
+                    log.info('100 train step: ' + str(step) + ', acc: ' + str(acc))
                     # 如果准确率大于threshold,保存模型,完成训练
                     if acc > self._storge_threshold:
                         saver.save(sess, self._model_storge_name, global_step=step)
                         break
                     pass
                 pass
-            step += 1
+                step += 1
             pass
         pass
 
@@ -155,14 +155,10 @@ pass
 
 
 class Prediction:
-    def __init__(self, captcha_char_num, char_set_len, image_width, image_height,
-                 name2vec, vec2name, model_path='./model/'):
+    def __init__(self, captcha_char_num, char_set_len, vec2name, model_path='./model/'):
         self._captcha_char_num = captcha_char_num
         self._char_set_len = char_set_len
-        self._name2vec = name2vec
         self._vec2name = vec2name
-        self._fcl_x = image_height / 8 if image_height % 8 != 0 else int(image_height / 8) + 1
-        self._fcl_y = image_width / 8 if image_width % 8 != 0 else int(image_width / 8) + 1
         self._model_path = model_path
         self._init()
 
@@ -198,10 +194,34 @@ class Prediction:
 
 
 pass
-if __name__ == '__main__':
-    pt = Prediction(4, 36, 150, 40, common.name2vec, common.vec2name, model_path='./')
-    print(pt.run(Image.open('D:/testsamples/1/20180415210248_61_J8XQ_102583705.png')))
-    print(pt.run(Image.open('D:/testsamples/0/20180415205722_13_YYM6_102570056.png')))
-    print(pt.run(Image.open('D:/testsamples/0/20180415205853_27_RXG6_102573639.png')))
-    print(pt.run(Image.open('D:/testsamples/0/20180415210057_45_9STB_102578751.png')))
 
+
+def prediction():
+    pt = Prediction(4, 62, common.invoice_vec2name, model_path='./model/51fp/')
+    all_image = os.listdir("E:/tensorflow/samples/51fp/TestHandleCaptcha/TestSamples")
+    all_num = 0
+    err_num = 0
+    for image in all_image:
+        base = os.path.basename("E:/tensorflow/samples/51fp/TestHandleCaptcha/TestSamples/" + image)
+        name = os.path.splitext(base)[0]
+        img = Image.open("E:/tensorflow/samples/51fp/TestHandleCaptcha/TestSamples/" + image)
+        img = np.array(img)
+        captcha = str(pt.run(img)).lower()
+        print('正确: %s'%(name), '预测: %s'%(captcha), '是否正确: %s'%('正确' if captcha == name else '错误'))
+        all_num += 1
+        if captcha != name:
+            err_num += 1
+        pass
+    pass
+    print('错误率: %f'%(err_num/all_num))
+pass
+
+
+def train():
+    ct = CnnTrain(9999, "E:/tensorflow/samples/51fp/RawData/TrainSamples/", 120, 32, 4, 62, common.invoice_name2vec,
+                  batch_size=128, model_storge_path="./model/51fp/", model_storge_prefix="crack_51fp_captcha.model")
+    ct.train()
+
+
+if __name__ == '__main__':
+    prediction()

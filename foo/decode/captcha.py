@@ -166,8 +166,8 @@ def crack_captcha():
 
 #crack_captcha()
 MODEL_DIR = "model/pb"
-MODEL_NAME = "crack_capcha.pb"
-CKPT_MODEL_POINT = './'
+MODEL_NAME = "crack_51fp_captcha.pb"
+CKPT_MODEL_POINT = './model/51fp/'
 def storge_pb():
     if not tf.gfile.Exists(MODEL_DIR):  # 创建目录
         tf.gfile.MakeDirs(MODEL_DIR)
@@ -198,6 +198,6 @@ def storge_pb():
 
 if __name__ == '__main__':
     #train_crack_captcha_cnn()
-    crack_captcha()
-    #storge_pb()
+    #crack_captcha()
+    storge_pb()
 
